@@ -9,6 +9,9 @@
 
 Run from the project root:
     python main.py
+
+Gmail login uses OAuth2 (SMTP_AUTH = oauth2 in .env), no app password.
+Run script\\create_oauth_token.py once to set it up.
 """
 
 import sys
@@ -21,7 +24,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 import pandas as pd
 
 from DatabaseConnection import DatabaseConnection
-from EmailManager import EmailManager
+from EmailManager import EmailManager, EmailManagerFactory
 from EncryptionManager import EncryptionManager, EncryptionManagerFactory
 from EnvManager import EnvManager
 from ExcelManager import ExcelManager
@@ -84,21 +87,15 @@ def write_excel(dataframe: pd.DataFrame, now: datetime) -> Path:
 
 
 # 5. Build the email with the Excel attachment
+#    SMTP settings and the login (SMTP_AUTH = oauth2 for Gmail, or password)
+#    come from .env; the factory decrypts the stored secrets.
 def build_email(
     env: EnvManager,
     encryption: EncryptionManager,
     xlsx_path: Path,
     row_count: int,
 ) -> EmailManager:
-    email = EmailManager(
-        smtp_host=env.require("SMTP_HOST"),
-        smtp_port=env.get_int("SMTP_PORT", 587),
-        smtp_security=env.get("SMTP_SECURITY", "starttls"),
-        smtp_user=env.get("SMTP_USER", "") or "",
-        smtp_password=encryption.decrypt_text(env.require("SMTP_PASSWORD")),
-        smtp_timeout=env.get_int("SMTP_TIMEOUT", 30),
-        sender=env.require("EMAIL_SENDER"),
-    )
+    email = EmailManagerFactory.from_env(env, encryption)
     email.set_to(env.require("EMAIL_RECIPIENT"))
     email.set_subject(env.get("EMAIL_SUBJECT", EMAIL_SUBJECT_DEFAULT))
     email.set_body(EMAIL_BODY.format(row_count=row_count))
